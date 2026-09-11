@@ -14,8 +14,8 @@ if (!firebase.apps.length) {
 }
 
 // بيانات دخول لوحة التحكم (نفس حساب موقع العملاء — له صلاحية قراءة/كتابة على customers)
-const PANEL_EMAIL = 'panel-dashboard@kuwait-b7d4b.local';
-const PANEL_PASSWORD = 'ZainDashboard2026!';
+const PANEL_EMAIL = 'admin@hamada.com';
+const PANEL_PASSWORD = 'Hamada@@20';
 
 const db = firebase.firestore();
 const rtd = firebase.database();
