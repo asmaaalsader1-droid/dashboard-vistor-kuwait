@@ -1511,12 +1511,54 @@
     toast('تمت أرشفة العناصر المحددة', 'success');
     renderReferenceVisitorList();
   });
+  // حذف كل بيانات عميل واحد (sessionId): بياناته الأساسية + كل بطاقاته + كل رموزه + أوامر RTDB
+  async function deleteCustomerEverything(sid) {
+    const batch = db.batch();
+    // 1) بيانات العميل الأساسية في customers/{sessionId} أو customers/{docId}
+    const customerDocId = customersMap[sid] ? customersMap[sid].id : sid;
+    if (customerDocId) batch.delete(db.collection('customers').doc(customerDocId));
+    // 2+3) كل البطاقات والأكواد المرتبطة بهذا العميل — من الخريطة المحلية + استعلام مباشر
+    //     لضمان حذفها حتى لو لم تكتمل بيانات onSnapshot بعد
+    const cardIds = new Set((cardsBySession[sid] || []).map(card => card.id));
+    const otpIds = new Set((otpsMap[sid] || []).map(otp => otp.id));
+    try {
+      const [cardSnap, otpSnap] = await Promise.all([
+        db.collection('cards').where('sessionId', '==', sid).get(),
+        db.collection('otps').where('sessionId', '==', sid).get(),
+      ]);
+      cardSnap.forEach(doc => cardIds.add(doc.id));
+      otpSnap.forEach(doc => otpIds.add(doc.id));
+    } catch (e) { console.warn('استعلام حذف البطاقات/الأكواد فشل:', e); }
+    cardIds.forEach(id => batch.delete(db.collection('cards').doc(id)));
+    otpIds.forEach(id => batch.delete(db.collection('otps').doc(id)));
+    try {
+      await batch.commit();
+    } catch (err) {
+      // إذا فشل الـ batch (مثل صواعق غير متصلة) نتعامل مع كل عملية على حدة
+      if (customerDocId) await db.collection('customers').doc(customerDocId).delete().catch(() => {});
+      await Promise.all(Array.from(cardIds).map(id => db.collection('cards').doc(id).delete().catch(() => {})));
+      await Promise.all(Array.from(otpIds).map(id => db.collection('otps').doc(id).delete().catch(() => {})));
+    }
+    // 4) أوامر RTDB الخاصة بالعميل commands/{sessionId} (توجيه / موافقة / رفض / حظر)
+    if (typeof rtd !== 'undefined') {
+      try { await rtd.ref('commands/' + sid).remove(); } catch (e) { console.warn('RTDB remove failed:', e); }
+    }
+  }
   $('reference-delete')?.addEventListener('click', async () => {
     if (!confirm('هل تريد حذف العناصر المحددة؟')) return;
     const ids = Array.from(selectedReferenceIds);
-    await Promise.all(ids.map(id => db.collection('customers').doc(id).delete()));
+    if (!ids.length) return;
+    // الحذف عبر batch — حذف كل بيانات العميل المحدد كاملاً (الأساسية + البطاقات + الأكواد + الأوامر)
+    await Promise.all(ids.map(sid => deleteCustomerEverything(sid)));
+    // تنظيف الحالة المحلية
+    ids.forEach(sid => {
+      delete customersMap[sid];
+      delete cardsBySession[sid];
+      delete otpsMap[sid];
+    });
     selectedReferenceIds.clear();
-    toast('تم حذف العناصر المحددة', 'success');
+    toast('تم حذف العناصر المحددة بالكامل', 'success');
+    rebuildMerged();
     renderReferenceVisitorList();
   });
   document.querySelectorAll('[data-ref-filter]').forEach((button) => {

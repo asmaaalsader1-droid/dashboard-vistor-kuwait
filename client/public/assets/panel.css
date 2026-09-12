@@ -482,3 +482,78 @@ body { direction: rtl; }
 .bank-card-number::-webkit-scrollbar { display:none; width:0; height:0; }
 .bank-card-brand { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bank-card .bank-card-logo { flex:none; }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   تثبيت الصفحة — لا يتم تمرير الصفحة إطلاقاً.
+   التمرير يكون فقط:
+     - داخل التبويب الجانبي (قائمة العملاء) عبر reference-visitor-list
+     - داخل كارت البيانات (صناديق العميل والإجراءات) عبر reference-detail-pane
+   ═══════════════════════════════════════════════════════════════════ */
+html:has(#app:not(.hidden)), body:has(#app:not(.hidden)) {
+  height: 100%;
+  overflow: hidden !important;
+}
+
+#app:not(.hidden) {
+  height: 100vh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* منطقة المحتوى: تناسب المساحة المتبقية تحت الهيدر بلا تمرير */
+#app:not(.hidden) > .p-6 {
+  height: calc(100vh - 46px) !important;
+  max-height: calc(100vh - 46px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* كلا العمودين يملآن الارتفاع المتاح */
+#app:not(.hidden) > .p-6 {
+  align-items: stretch !important;
+}
+#app:not(.hidden) > .p-6 > * {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+#app:not(.hidden) > .p-6 {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+/* التبويب الجانبي: ثابت الارتفاع، والتمرير داخل قائمة العملاء فقط */
+#reference-sidebar {
+  min-height: 0 !important;
+  max-height: none !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+#reference-sidebar .reference-sidebar-head {
+  flex: none;
+}
+#reference-visitor-list {
+  min-height: 0;
+}
+
+/* كارت البيانات: التمرير داخله فقط، والرأس (اسم الزائر + الإجراءات) ثابت */
+#reference-detail-pane {
+  min-height: 0 !important;
+  max-height: none !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+#reference-detail-content {
+  min-height: 0 !important;
+}
+
+@media (max-width: 900px) {
+  #app:not(.hidden) > .p-6 { display: block !important; }
+  #reference-sidebar { height: calc(100vh - 46px) !important; }
+  #reference-detail-pane { height: calc(100vh - 46px) !important; }
+}
+
+/* حالة عدم وجود زائر محدد: المساحة الفارغة لا تسبب تمريراً داخل الكارت */
+#reference-detail-content:empty {
+  display: none;
+}
