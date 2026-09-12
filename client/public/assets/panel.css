@@ -237,6 +237,11 @@ body { direction: rtl; }
 .ref-detail-field { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid #f3f4f6; }
 .ref-detail-field span { color:#9ca3af; font-size:10px; }
 .ref-detail-field b { max-width:60%; overflow:hidden; color:#374151; font:600 10px "Tajawal",sans-serif; text-overflow:ellipsis; white-space:nowrap; }
+/* النصوص القابلة للنسخ عند النقر داخل صناديق التفاصيل */
+.ref-copyable { cursor:pointer; position:relative; transition:box-shadow .15s, background .15s; border-radius:4px; }
+.ref-copyable:hover { background:rgba(16,185,129,.12); box-shadow:0 0 0 1px rgba(16,185,129,.4); }
+.ref-detail-field b.ref-copyable:hover { background:rgba(16,185,129,.12); box-shadow:0 0 0 1px rgba(16,185,129,.4); }
+.ref-copyable:active { background:rgba(16,185,129,.25); }
 .ref-data-bubble { margin-bottom:8px; padding:8px; border:1px solid #dbeafe; border-radius:6px; background:#eff6ff; }
 .ref-data-bubble > strong { display:block; margin-bottom:2px; color:#2563eb; font-size:10px; }
 .ref-otp-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; padding:9px; border:1px solid #d1fae5; border-radius:6px; background:#ecfdf5; }
@@ -334,7 +339,7 @@ body { direction: rtl; }
 
 
 /* One-column reference detail stack: basic info, each card, then OTPs. */
-.ref-detail-stack { display:flex; flex-direction:column; gap:10px; padding:12px 0 0; width:60%; }
+.ref-detail-stack { display:flex; flex-direction:column; gap:10px; padding:12px 0 0; width:40%; }
 .ref-detail-stack > article, .ref-cards-section { width:100%; box-sizing:border-box; padding:12px; background:#fff; border:1px solid #e5e7eb; border-radius:7px; }
 .ref-detail-stack h3, .ref-cards-section > h3 { margin:0 0 10px; color:#374151; font-size:12px; font-weight:800; }
 .ref-card-box { margin:0 0 9px; padding:10px; border:1px solid #dbeafe; border-radius:7px; background:#eff6ff; }
@@ -352,9 +357,7 @@ body { direction: rtl; }
 .ref-card-actions button:last-child { background:#dc2626; }
 .ref-card-actions button:hover:not(:disabled) { filter:brightness(.92); }
 .ref-card-actions button:disabled { opacity:.38; cursor:not-allowed; }
-.ref-otp-box { order:3; }
-.ref-basic-box { order:1; }
-.ref-cards-section { order:2; }
+.ref-otp-box, .ref-basic-box, .ref-cards-section { order:0; }
 @media (max-width:900px) { .ref-detail-stack { padding:8px 0 0; } .ref-card-box { padding:9px; } }
 
 

