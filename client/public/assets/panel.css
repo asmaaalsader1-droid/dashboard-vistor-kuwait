@@ -293,7 +293,9 @@ body { direction: rtl; }
 .reference-bulk-actions button:hover:not(:disabled) { background:#e5e7eb; color:#374151; }
 .reference-bulk-actions button:disabled { opacity:.45; cursor:not-allowed; }
 .reference-bulk-actions #reference-archive:not(:disabled) { background:#f59e0b; color:#fff; }
+.reference-bulk-actions #reference-unarchive:not(:disabled) { background:#059669; color:#fff; }
 .reference-bulk-actions #reference-delete:not(:disabled) { background:#ef4444; color:#fff; }
+.reference-bulk-actions #reference-unarchive { white-space:normal; line-height:1.2; }
 .reference-checkbox { flex:none; width:13px; color:#9ca3af; font-size:14px; line-height:20px; }
 .reference-visitor-row.bulk-selected { background:#f0fdf4; }
 

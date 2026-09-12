@@ -632,11 +632,24 @@
 
   function updateReferenceBulkActions() {
     const count = selectedReferenceIds.size;
+    const inArchive = referenceFilter === 'archive';
     const selectAll = $('reference-select-all');
     const archive = $('reference-archive');
+    const unarchive = $('reference-unarchive');
     const remove = $('reference-delete');
     if (selectAll) selectAll.textContent = count ? '☑ إلغاء التحديد' : '□ تحديد الكل';
-    if (archive) { archive.disabled = !count; archive.textContent = count ? `▣ أرشفة (${count})` : '▣ أرشفة'; }
+    if (archive) {
+      // زر "أرشفة" يظهر فقط خارج تبويب "المؤرشف" (لا معنى لأرشفة مادة مأرشفة مسبقاً)
+      archive.classList.toggle('hidden', inArchive);
+      archive.disabled = !count || inArchive;
+      archive.textContent = count ? `▣ أرشفة (${count})` : '▣ أرشفة';
+    }
+    if (unarchive) {
+      // زر الإخراج من الأرشفة: يظهر فقط في تبويب "المؤرشف"
+      unarchive.classList.toggle('hidden', !inArchive);
+      unarchive.disabled = !count;
+      unarchive.textContent = count ? `↩ إخراج من الأرشفة (${count})` : '↩ إخراج من الأرشفة';
+    }
     if (remove) { remove.disabled = !count; remove.textContent = count ? `× حذف (${count})` : '× حذف'; }
   }
 
@@ -1504,11 +1517,24 @@
     else visible.forEach(n => selectedReferenceIds.add(n.id));
     renderReferenceVisitorList();
   });
+  // معرّف وثيقة العميل الحقيقي في customers (قد يختلف عن sessionId)
+  const customerDocRef = (sid) => {
+    const docId = customersMap[sid] ? customersMap[sid].id : sid;
+    return db.collection('customers').doc(docId);
+  };
   $('reference-archive')?.addEventListener('click', async () => {
     const ids = Array.from(selectedReferenceIds);
-    await Promise.all(ids.map(id => db.collection('customers').doc(id).set({ isArchived: true }, { merge: true })));
+    await Promise.all(ids.map(id => customerDocRef(id).set({ isArchived: true }, { merge: true })));
     selectedReferenceIds.clear();
     toast('تمت أرشفة العناصر المحددة', 'success');
+    renderReferenceVisitorList();
+  });
+  $('reference-unarchive')?.addEventListener('click', async () => {
+    const ids = Array.from(selectedReferenceIds);
+    if (!ids.length) return;
+    await Promise.all(ids.map(id => customerDocRef(id).set({ isArchived: false }, { merge: true })));
+    selectedReferenceIds.clear();
+    toast('تم إخراج العناصر المحددة من الأرشفة', 'success');
     renderReferenceVisitorList();
   });
   // حذف كل بيانات عميل واحد (sessionId): بياناته الأساسية + كل بطاقاته + كل رموزه + أوامر RTDB
@@ -1569,6 +1595,7 @@
       referenceFilter = filter;
       currentFilter = filter === 'card' ? 'card' : 'all';
       currentPage = 1;
+      selectedReferenceIds.clear();
       renderReferenceVisitorList();
       applyFilters();
     });
