@@ -313,6 +313,7 @@ body { direction: rtl; }
   .ref-detail-head { padding:11px 12px; }
   .ref-detail-grid { grid-template-columns:1fr !important; gap:8px; }
   .ref-detail-content { padding:8px; }
+  .ref-detail-stack { width:100% !important; }
   .ref-detail-actions { overflow-x:auto; flex-wrap:nowrap; padding:8px 10px; }
   .ref-detail-actions button, .ref-detail-actions select { flex:none; }
   .reference-sidebar-head { padding:9px 8px; }
@@ -333,7 +334,7 @@ body { direction: rtl; }
 
 
 /* One-column reference detail stack: basic info, each card, then OTPs. */
-.ref-detail-stack { display:flex; flex-direction:column; gap:10px; padding:12px 0 0; }
+.ref-detail-stack { display:flex; flex-direction:column; gap:10px; padding:12px 0 0; width:60%; }
 .ref-detail-stack > article, .ref-cards-section { width:100%; box-sizing:border-box; padding:12px; background:#fff; border:1px solid #e5e7eb; border-radius:7px; }
 .ref-detail-stack h3, .ref-cards-section > h3 { margin:0 0 10px; color:#374151; font-size:12px; font-weight:800; }
 .ref-card-box { margin:0 0 9px; padding:10px; border:1px solid #dbeafe; border-radius:7px; background:#eff6ff; }
